@@ -18,7 +18,6 @@ class ParallelSudokuAntSystem;
 class SubColony : public IAntColony
 {
 private:
-	int colonyId;
 	int numAnts;
 	float q0;
 	float rho;        // ACS evaporation parameter (used for both standard and communication updates)
@@ -113,7 +112,6 @@ private:
 	std::atomic<bool> stopFlag;
 	
 	// Communication helpers
-	int CalculateInterval(int iteration);
 	std::vector<int> GenerateMatchArray();
 	void CommunicateRingTopology();
 	void CommunicateRandomTopology(const std::vector<int>& matchArray);
@@ -139,6 +137,5 @@ public:
 	virtual const Board& GetSolution() { return globalBest; }
 	int GetIterationsCompleted() { return iterationsCompleted; }
 	bool GetCommunicationOccurred() { return communicationOccurred; }
-	void PrintColonyDetails();
 };
 

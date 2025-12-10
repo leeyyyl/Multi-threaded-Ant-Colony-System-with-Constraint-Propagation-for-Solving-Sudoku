@@ -55,9 +55,9 @@ int main( int argc, char *argv[] )
 	// solve, then spit out 0 for success, 1 for fail, followed by time in seconds
 	Arguments a( argc, argv );
 	string puzzleString;
-	if ( a.GetArg("blank", 0 ) && a.GetArg("order", 0 ))
+	if ( a.GetArg("blank", 0) && a.GetArg("order", 0))
 	{
-		int order = a.GetArg("order", 0 );
+		int order = a.GetArg("order", 0);
 		if ( order != 0 )
 			puzzleString = string(order*order*order*order,'.');
 	}
@@ -85,8 +85,8 @@ int main( int argc, char *argv[] )
 	int nSubColonies = a.GetArg("subcolonies", 4);
 	float q0 = a.GetArg("q0", 0.9f);
 	float rho = a.GetArg("rho", 0.9f);  // ACS rho (used in Alg 0 and Alg 2)
-	float evap = a.GetArg("evap", 0.005f );
-	bool blank = a.GetArg("blank", false );
+	float evap = a.GetArg("evap", 0.005f);
+	bool blank = a.GetArg("blank", false);
 	bool verbose = a.GetArg("verbose", 0);
 	bool showInitial = a.GetArg("showinitial", 0);
 	bool success;
@@ -107,16 +107,16 @@ int main( int argc, char *argv[] )
 	
 	if ( showInitial )
 	{
-		// print inital grid
+		// print initial grid
 		cout << "Initial constrained grid" << endl;
-		cout << board.AsString(false,true) << endl;
+		cout << board.AsString(false, true) << endl;
 	}
 	
-	success = solver->Solve(board, (float)timeOutSecs );
+		success = solver->Solve(board, (float)timeOutSecs);
 	solution = solver->GetSolution();
 	solTime = solver->GetSolutionTime();
 
-	// sanity chack the solution:
+	// sanity check the solution:
 	if ( success && !board.CheckSolution(solution) )
 	{
 		cout << "solution not valid" << a.GetArg("file",string()) << " " << algorithm << endl;
@@ -156,7 +156,7 @@ int main( int argc, char *argv[] )
 		else
 		{
 			cout << "Solution:" << endl;
-			string outString = solution.AsString( true );
+			string outString = solution.AsString(true);
 			cout << outString << endl;
 			cout << "solved in " << solTime << endl;
 			// Show iterations for algorithms 0 and 2

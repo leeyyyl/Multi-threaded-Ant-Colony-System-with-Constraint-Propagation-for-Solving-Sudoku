@@ -13,7 +13,7 @@ public:
 	Board(const Board &other);
 	~Board();
 
-	string AsString(bool useNmbers=false, bool showUnfixed = false);
+	string AsString(bool useNumbers=false, bool showUnfixed = false);
 	int FixedCellCount(void) const;
 	int InfeasibleCellCount(void) const;
 	void SetCell(int i, const ValueSet &c );
@@ -37,11 +37,9 @@ private:
 
 	int order;   // order of puzzle
 	int numUnits; // number of units (rows, columns, blocks)
-	int numCells; // numer of cells
+	int numCells; // number of cells
 	int numFixedCells; // number of cells with uniquely determined value
 	int numInfeasible; // number of cells with no possibilities.
-	void Eliminate(int i, const ValueSet &c );
-	void Eliminate2(int i, const ValueSet &c );
 	void ConstrainCell(int i );
 };
 

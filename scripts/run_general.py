@@ -115,7 +115,7 @@ def parse_metadata(path: Path) -> InstanceMetadata:
 
 
 def sort_instance_metadata(instances: Sequence[InstanceMetadata]) -> List[InstanceMetadata]:
-    size_order = {"9x9": 0, "16x16": 1, "25x25": 2}
+    size_order = {"9x9": 0, "16x16": 1, "25x25": 2, "36x36": 3}
 
     def key(meta: InstanceMetadata) -> Tuple[int, int, int, str]:
         return (
@@ -330,7 +330,7 @@ def main() -> int:
     parser.add_argument("--rho", type=float, default=0.9, help="Override ACS rho parameter.")
     parser.add_argument("--evap", type=float, default=0.005, help="Override ACS evaporation parameter.")
     parser.add_argument("--limit", type=int, default=None, help="Optional cap on number of instances to process.")
-    parser.add_argument("--puzzle-size", dest="puzzle_sizes", nargs="+", choices=["9x9", "16x16", "25x25"], help="Filter by puzzle size(s), e.g. --puzzle-size 25x25.")
+    parser.add_argument("--puzzle-size", dest="puzzle_sizes", nargs="+", choices=["9x9", "16x16", "25x25", "36x36"], help="Filter by puzzle size(s), e.g. --puzzle-size 25x25.")
     parser.add_argument("--fixed-percentage", dest="fixed_percentages", type=int, nargs="+", help="Filter by fixed-cell percentage(s), e.g. --fixed-percentage 40.")
     parser.add_argument("--solver-timeout", type=float, default=None, help="Wall-clock timeout applied to each solver invocation.")
     parser.add_argument("--solver-verbose", action="store_true", help="Pass --verbose to the solver binary.")

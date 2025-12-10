@@ -16,7 +16,6 @@ class SudokuAntSystem : public SudokuSolver, public IAntColony
 	float bestEvap;
 	Board bestSol;
 	float bestPher;
-	int bestVal;
 	int iterationsCompleted;
 	Timer solutionTimer;
 	float solTime;

@@ -1,5 +1,5 @@
 //
-// backtracking search using the same comstraint propagation code as the ant colony system
+// backtracking search using the same constraint propagation code as the ant colony system
 // HL 18/9/2017
 //
 #include "backtracksearch.h"

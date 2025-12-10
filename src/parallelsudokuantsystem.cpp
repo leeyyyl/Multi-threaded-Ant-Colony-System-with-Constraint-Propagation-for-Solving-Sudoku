@@ -28,7 +28,7 @@
 // Constructor: Initialize a sub-colony with its own parameters
 // ----------------------------------------------------------------------------
 SubColony::SubColony(int id, int numAnts, float q0, float rho, float pher0, float bestEvap)
-	: colonyId(id), numAnts(numAnts), q0(q0), rho(rho), pher0(pher0), bestEvap(bestEvap), bestPher(0.0f),
+	: numAnts(numAnts), q0(q0), rho(rho), pher0(pher0), bestEvap(bestEvap), bestPher(0.0f),
 	  iterationBestScore(0), bestSolScore(0), receivedIterationBestScore(0), receivedBestSolScore(0),
 	  currentIteration(0), pher(nullptr), numCells(0), numUnits(0),
 	  contributions(nullptr), hasContribution(nullptr)
@@ -99,12 +99,12 @@ void SubColony::Initialize(const Board& puzzle)
 	bestPher = 0.0f;  // Reset best pheromone value
 }
 
-void SubColony::InitPheromone(int nNumCells, int valuesPerCell)
+void SubColony::InitPheromone(int numCells, int valuesPerCell)
 {
 	if (pher != nullptr)
 		ClearPheromone();
 	
-	numCells = nNumCells;
+	this->numCells = numCells;
 	pher = new float*[numCells];
 	for (int i = 0; i < numCells; i++)
 	{
@@ -122,9 +122,9 @@ void SubColony::ClearPheromone()
 	pher = nullptr;
 }
 
-float SubColony::PherAdd(int cellsFilled)
+float SubColony::PherAdd(int numCellsFixed)
 {
-	return numCells / (float)(numCells - cellsFilled);
+	return numCells / (float)(numCells - numCellsFixed);
 }
 
 // ============================================================================
@@ -333,14 +333,6 @@ ParallelSudokuAntSystem::~ParallelSudokuAntSystem()
 {
 	for (auto colony : subColonies)
 		delete colony;
-}
-
-int ParallelSudokuAntSystem::CalculateInterval(int iteration)
-{
-	if (iteration < 200)
-		return 100;
-	else
-		return 10;
 }
 
 std::vector<int> ParallelSudokuAntSystem::GenerateMatchArray()
@@ -613,8 +605,21 @@ void ParallelSudokuAntSystem::SubColonyWorker(int colonyId, const Board& puzzle)
 		
 		// --- STEP 3: Pheromone Update (Mutually Exclusive) ---
 		// Either standard Algorithm 0 update OR three-source communication update
-		int interval = CalculateInterval(iter);
-		if (iter % interval == 0)
+		// Before iteration 200: communicate every 100 iterations (at 100, 200)
+		// After iteration 200: communicate every 10 iterations (at 210, 220, etc.)
+		bool shouldCommunicate = false;
+		if (iter < 200)
+		{
+			// Every 100 iterations: 100, 200
+			shouldCommunicate = (iter % 100 == 0);
+		}
+		else
+		{
+			// Every 10 iterations: 210, 220, 230, etc.
+			shouldCommunicate = (iter % 10 == 0);
+		}
+		
+		if (shouldCommunicate)
 		{
 			// --- STEP 3a: Communication Phase (Periodic Barrier Synchronization) ---
 			PerformBarrierSynchronization(puzzle);
@@ -716,16 +721,4 @@ bool ParallelSudokuAntSystem::Solve(const Board& puzzle, float timeLimit)
 	return solved;
 }
 
-void ParallelSudokuAntSystem::PrintColonyDetails()
-{
-	std::cout << "Sub-Colony Details:" << std::endl;
-	for (int i = 0; i < numSubColonies; i++)
-	{
-		std::cout << "  Colony " << i << ": "
-		          << "iter=" << subColonies[i]->GetCurrentIteration() << ", "
-		          << "iter-best=" << subColonies[i]->GetIterationBestScore() << "/" << subColonies[i]->GetIterationBest().CellCount() << ", "
-		          << "best-so-far=" << subColonies[i]->GetBestSolScore() << "/" << subColonies[i]->GetBestSol().CellCount()
-		          << std::endl;
-	}
-}
 

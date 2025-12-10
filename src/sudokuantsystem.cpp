@@ -1,9 +1,9 @@
 #include "sudokuantsystem.h"
 #include <iostream>
 
-void SudokuAntSystem::InitPheromone(int nNumCells, int valuesPerCell )
+void SudokuAntSystem::InitPheromone(int numCells, int valuesPerCell )
 {
-	numCells = nNumCells;
+	this->numCells = numCells;
 	pher = new float*[numCells];
 	for (int i = 0; i < numCells; i++)
 	{
@@ -20,9 +20,9 @@ void SudokuAntSystem::ClearPheromone()
 	delete[] pher;
 }
 
-float SudokuAntSystem::PherAdd( int cellsFilled)
+float SudokuAntSystem::PherAdd(int numCellsFixed)
 {
-	return numCells / (float)(numCells - cellsFilled);
+	return numCells / (float)(numCells - numCellsFixed);
 }
 
 void SudokuAntSystem::UpdatePheromone()
@@ -31,14 +31,14 @@ void SudokuAntSystem::UpdatePheromone()
 	{
 		if (bestSol.GetCell(i).Fixed())
 		{
-			pher[i][bestSol.GetCell(i).Index()] = pher[i][bestSol.GetCell(i).Index()] * (1.0f - rho) + rho*bestPher;
+			pher[i][bestSol.GetCell(i).Index()] = pher[i][bestSol.GetCell(i).Index()] * (1.0f - rho) + rho * bestPher;
 		}
 	}
 }
 
 void SudokuAntSystem::LocalPheromoneUpdate(int iCell, int iChoice)
 {
-	pher[iCell][iChoice] = pher[iCell][iChoice] * 0.9f + pher0*0.1f;
+	pher[iCell][iChoice] = pher[iCell][iChoice] * 0.9f + pher0 * 0.1f;
 }
 
 bool SudokuAntSystem::Solve(const Board& puzzle, float maxTime )
@@ -47,7 +47,6 @@ bool SudokuAntSystem::Solve(const Board& puzzle, float maxTime )
 	int iter = 0;
 	bool solved = false;
 	bestPher = 0.0f;
-	int curBestAnt = 0;
 	iterationsCompleted = 0;
 	InitPheromone( puzzle.CellCount(), puzzle.GetNumUnits() );
 	while (!solved)
@@ -85,7 +84,6 @@ bool SudokuAntSystem::Solve(const Board& puzzle, float maxTime )
 			// new best
 			bestSol.Copy(antList[iBest]->GetSolution());
 			bestPher = pherToAdd;
-			curBestAnt = bestVal;
 			if (bestVal == numCells)
 			{
 				solved = true;
