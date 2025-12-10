@@ -21,8 +21,7 @@ private:
 	int colonyId;
 	int numAnts;
 	float q0;
-	float rho;        // Standard ACS evaporation parameter (Algorithm 0, typically 0.9)
-	float rho_comm;   // Pheromone evaporation rate for communication update (typically 0.05)
+	float rho;        // ACS evaporation parameter (used for both standard and communication updates)
 	float pher0;
 	
 	Board iterationBest;      // Best solution in current iteration (ΔT_ij^1 - local)
@@ -57,7 +56,7 @@ public:
 	float bestPher;           // Best pheromone value (for Algorithm 0 standard update)
 	float bestEvap;           // Best pheromone evaporation parameter
 	
-	SubColony(int id, int numAnts, float q0, float rho, float rhoComm, float pher0, float bestEvap);
+	SubColony(int id, int numAnts, float q0, float rho, float pher0, float bestEvap);
 	~SubColony();
 	
 	// Run one iteration of the ant colony
@@ -132,7 +131,7 @@ private:
 	
 public:
 	ParallelSudokuAntSystem(int numSubColonies, int numAntsPerColony, 
-	                        float q0, float rho, float rhoComm, float pher0, float bestEvap);
+	                        float q0, float rho, float pher0, float bestEvap);
 	~ParallelSudokuAntSystem();
 	
 	virtual bool Solve(const Board& puzzle, float maxTime);

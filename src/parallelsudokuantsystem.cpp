@@ -27,8 +27,8 @@
 // ----------------------------------------------------------------------------
 // Constructor: Initialize a sub-colony with its own parameters
 // ----------------------------------------------------------------------------
-SubColony::SubColony(int id, int numAnts, float q0, float rho, float rhoComm, float pher0, float bestEvap)
-	: colonyId(id), numAnts(numAnts), q0(q0), rho(rho), rho_comm(rhoComm), pher0(pher0), bestEvap(bestEvap), bestPher(0.0f),
+SubColony::SubColony(int id, int numAnts, float q0, float rho, float pher0, float bestEvap)
+	: colonyId(id), numAnts(numAnts), q0(q0), rho(rho), pher0(pher0), bestEvap(bestEvap), bestPher(0.0f),
 	  iterationBestScore(0), bestSolScore(0), receivedIterationBestScore(0), receivedBestSolScore(0),
 	  currentIteration(0), pher(nullptr), numCells(0), numUnits(0),
 	  contributions(nullptr), hasContribution(nullptr)
@@ -153,11 +153,9 @@ void SubColony::UpdatePheromone()
 // This implements the parallel ACS pheromone update with THREE sources.
 // Called ONLY after communication exchanges.
 //
-// EQUATION: τ_ij(t+1) = (1-ρ_comm)·τ_ij(t) + Δτ_ij
-//           where ρ_comm is the rate of pheromone evaporation for communication (e.g., 0.05)
+// EQUATION: τ_ij(t+1) = (1-ρ)·τ_ij(t) + Δτ_ij
+//           where ρ is the rate of pheromone evaporation (same as standard ACS)
 //           and Δτ_ij = Δτ_ij^1 + Δτ_ij^2 + Δτ_ij^3
-//
-// NOTE: This is DIFFERENT from the standard ACS ρ parameter (0.9)
 //
 // SOURCE 1 (Δτ_ij^1): Local iteration-best (this colony's best this iteration)
 // SOURCE 2 (Δτ_ij^2): Received iteration-best (from ring topology neighbor)
@@ -213,8 +211,8 @@ void SubColony::UpdatePheromoneWithCommunication()
 			if (hasContribution[j])
 			{
 				// Evaporate old pheromone, add new contribution
-				// Using rho_comm (communication evaporation rate) instead of standard ACS rho
-				pher[i][j] = pher[i][j] * (1.0f - rho_comm) + contributions[j];
+				// Using rho for communication update
+				pher[i][j] = pher[i][j] * (1.0f - rho) + contributions[j];
 			}
 		}
 	}
@@ -307,7 +305,7 @@ void SubColony::ReceiveBestSol(const Board& solution)
 // Constructor: Create the parallel system with N sub-colonies
 // ----------------------------------------------------------------------------
 ParallelSudokuAntSystem::ParallelSudokuAntSystem(int nSubColonies, int numAntsPerColony,
-	float q0, float rho, float rhoComm, float pher0, float bestEvap)
+	float q0, float rho, float pher0, float bestEvap)
 	: numSubColonies(nSubColonies), maxTime(120.0f),
 	  globalBestScore(0), iterationsCompleted(0), communicationOccurred(false), solTime(0.0f), barrier(0), stopFlag(false)
 {
@@ -320,10 +318,10 @@ ParallelSudokuAntSystem::ParallelSudokuAntSystem(int nSubColonies, int numAntsPe
 	}
 	
 	// Create N independent sub-colonies
-	// Note: rho (0.9) is for standard ACS global update, rhoComm (0.05) is for communication update
+	// Note: rho is used for both standard ACS global update and communication update
 	for (int i = 0; i < numSubColonies; i++)
 	{
-		subColonies.push_back(new SubColony(i, numAntsPerColony, q0, rho, rhoComm, pher0, bestEvap));
+		subColonies.push_back(new SubColony(i, numAntsPerColony, q0, rho, pher0, bestEvap));
 	}
 	
 	// Initialize master random generator (for random topology matching)

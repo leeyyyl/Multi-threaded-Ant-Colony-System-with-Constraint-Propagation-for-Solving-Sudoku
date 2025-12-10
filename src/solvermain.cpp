@@ -84,8 +84,7 @@ int main( int argc, char *argv[] )
 	int nAnts = a.GetArg("ants", 10);
 	int nSubColonies = a.GetArg("subcolonies", 4);
 	float q0 = a.GetArg("q0", 0.9f);
-	float rho = a.GetArg("rho", 0.9f);  // Standard ACS rho (used in Alg 0 and internally in Alg 2)
-	float rhoComm = a.GetArg("rhocomm", 0.05f);  // Communication evaporation rate (Alg 2 only)
+	float rho = a.GetArg("rho", 0.9f);  // ACS rho (used in Alg 0 and Alg 2)
 	float evap = a.GetArg("evap", 0.005f );
 	bool blank = a.GetArg("blank", false );
 	bool verbose = a.GetArg("verbose", 0);
@@ -101,7 +100,7 @@ int main( int argc, char *argv[] )
 	else if ( algorithm == 1 )
 		solver = new BacktrackSearch();
 	else if ( algorithm == 2 )
-		solver = new ParallelSudokuAntSystem( nSubColonies, nAnts, q0, rho, rhoComm, 1.0f/board.CellCount(), evap);
+		solver = new ParallelSudokuAntSystem( nSubColonies, nAnts, q0, rho, 1.0f/board.CellCount(), evap);
 	else
 		solver = new BacktrackSearch();
 
@@ -135,8 +134,16 @@ int main( int argc, char *argv[] )
 		if ( !success )
 		{
 			cout << "failed in time " << solTime << endl;
-			// Show iterations for algorithm 2
-			if ( algorithm == 2 )
+			// Show iterations for algorithms 0 and 2
+			if ( algorithm == 0 )
+			{
+				SudokuAntSystem* antSolver = dynamic_cast<SudokuAntSystem*>(solver);
+				if ( antSolver )
+				{
+					cout << "iterations: " << antSolver->GetIterationsCompleted() << endl;
+				}
+			}
+			else if ( algorithm == 2 )
 			{
 				ParallelSudokuAntSystem* parallelSolver = dynamic_cast<ParallelSudokuAntSystem*>(solver);
 				if ( parallelSolver )
@@ -152,8 +159,16 @@ int main( int argc, char *argv[] )
 			string outString = solution.AsString( true );
 			cout << outString << endl;
 			cout << "solved in " << solTime << endl;
-			// Show iterations for algorithm 2
-			if ( algorithm == 2 )
+			// Show iterations for algorithms 0 and 2
+			if ( algorithm == 0 )
+			{
+				SudokuAntSystem* antSolver = dynamic_cast<SudokuAntSystem*>(solver);
+				if ( antSolver )
+				{
+					cout << "iterations: " << antSolver->GetIterationsCompleted() << endl;
+				}
+			}
+			else if ( algorithm == 2 )
 			{
 				ParallelSudokuAntSystem* parallelSolver = dynamic_cast<ParallelSudokuAntSystem*>(solver);
 				if ( parallelSolver )

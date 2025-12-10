@@ -48,6 +48,7 @@ bool SudokuAntSystem::Solve(const Board& puzzle, float maxTime )
 	bool solved = false;
 	bestPher = 0.0f;
 	int curBestAnt = 0;
+	iterationsCompleted = 0;
 	InitPheromone( puzzle.CellCount(), puzzle.GetNumUnits() );
 	while (!solved)
 	{
@@ -104,6 +105,7 @@ bool SudokuAntSystem::Solve(const Board& puzzle, float maxTime )
 			}
 		}
 	}
+	iterationsCompleted = iter;
 	ClearPheromone();
 	return solved;
 	

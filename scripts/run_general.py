@@ -78,6 +78,26 @@ def iter_instance_files(instances_root: Path) -> Iterable[Path]:
     return sorted(instances_root.glob("*.txt"))
 
 
+def iter_all_instance_files(repo_root: Path) -> Iterable[Path]:
+    """Iterate over both general and logic-solvable instances."""
+    all_files = []
+    
+    # General instances
+    general_root = repo_root / "instances" / "general"
+    if general_root.exists():
+        all_files.extend(general_root.glob("*.txt"))
+    
+    # Logic-solvable instances
+    logic_root = repo_root / "instances" / "logic-solvable"
+    if logic_root.exists():
+        all_files.extend(logic_root.glob("*.txt"))
+    
+    if not all_files:
+        raise FileNotFoundError("No instance files found in 'instances/general' or 'instances/logic-solvable'.")
+    
+    return sorted(all_files)
+
+
 def parse_metadata(path: Path) -> InstanceMetadata:
     name = path.stem
     match = re.match(r"inst(?P<size>[0-9x]+)_(?P<fixed>\d+)_(?P<idx>\d+)", name)
@@ -89,7 +109,8 @@ def parse_metadata(path: Path) -> InstanceMetadata:
         fixed = int(match.group("fixed"))
         idx = int(match.group("idx"))
     else:
-        size = "unknown"
+        # Logic-solvable instances: use puzzle name as size_label
+        size = name
     return InstanceMetadata(path=path, size_label=size or "unknown", fixed_percentage=fixed, instance_id=idx)
 
 
@@ -133,12 +154,10 @@ def build_solver_command(
         cmd.extend(("--q0", str(args.q0)))
     if args.rho is not None:
         cmd.extend(("--rho", str(args.rho)))
-    if args.rhocomm is not None and args.alg == 2:
-        cmd.extend(("--rhocomm", str(args.rhocomm)))
     if args.evap is not None:
         cmd.extend(("--evap", str(args.evap)))
-    # Always add verbose for algorithm 2 to get iteration count
-    if args.alg == 2 or args.solver_verbose:
+    # Always add verbose for algorithms 0 and 2 to get iteration count
+    if args.alg == 0 or args.alg == 2 or args.solver_verbose:
         cmd.append("--verbose")
     return cmd
 
@@ -173,7 +192,10 @@ def parse_solver_output(stdout: str, stderr: str) -> Tuple[Optional[bool], Optio
     iterations: Optional[int] = None
     communication: Optional[bool] = None
 
-    for line in stdout_lines:
+    # Combine stdout and stderr for parsing (iterations might be in either)
+    all_lines = stdout_lines + stderr_lines
+
+    for line in all_lines:
         if line in {"0", "1"} and success is None:
             success = (line == "0")
             continue
@@ -190,18 +212,20 @@ def parse_solver_output(stdout: str, stderr: str) -> Tuple[Optional[bool], Optio
             success = False
             continue
 
-        # Parse iterations for algorithm 2
-        iter_match = re.search(r"iterations:\s*([0-9]+)", line)
+        # Parse iterations (for algorithms 0 and 2)
+        iter_match = re.search(r"iterations:\s*([0-9]+)", line, re.IGNORECASE)
         if iter_match:
             iterations = int(iter_match.group(1))
             continue
 
         # Parse communication flag for algorithm 2
-        comm_match = re.search(r"communication:\s*(yes|no)", line)
+        comm_match = re.search(r"communication:\s*(yes|no)", line, re.IGNORECASE)
         if comm_match:
-            communication = (comm_match.group(1) == "yes")
+            communication = (comm_match.group(1).lower() == "yes")
             continue
 
+    # Fallback: check stdout for time if not found yet
+    for line in stdout_lines:
         # Fallback: if a line can be parsed as float and we still do not have a time.
         if solve_time is None:
             try:
@@ -224,7 +248,7 @@ def parse_solver_output(stdout: str, stderr: str) -> Tuple[Optional[bool], Optio
 
 def write_csv(output_path: Path, rows: Sequence[dict]) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["alg", "puzzle_size", "f%", "ants", "subcolonies", "q0", "rho", "rho_comm", "xi", "timeout", "success_rate", "time_mean", "time_std", "iter_mean", "with_comm", "without_comm"]
+    fieldnames = ["alg", "puzzle_size", "f%", "ants", "subcolonies", "q0", "rho", "bve", "timeout", "success_rate", "time_mean", "time_std", "iter_mean", "with_comm", "without_comm"]
     with output_path.open("w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -266,6 +290,7 @@ def summarize_group(size_label: str, fixed_percentage: Optional[int], stats: dic
         summary_msg += f", comm={with_comm}/{with_comm + without_comm}"
     
     print(summary_msg)
+    sys.stdout.flush()  # Force immediate output to prevent timing issues
 
     # Get actual ant count (default is 10)
     actual_ants = args.ants if args.ants is not None else 10
@@ -281,13 +306,12 @@ def summarize_group(size_label: str, fixed_percentage: Optional[int], stats: dic
         "subcolonies": actual_subcolonies,
         "q0": args.q0,
         "rho": args.rho,
-        "rho_comm": args.rhocomm if args.alg == 2 else "",
-        "xi": args.evap,
+        "bve": args.evap,
         "timeout": args.timeout,
         "success_rate": round(success_rate, 2),
         "time_mean": average_time,
         "time_std": time_std,
-        "iter_mean": average_iter if iterations else "",
+        "iter_mean": average_iter if (args.alg == 0 or args.alg == 2) else "",
         "with_comm": with_comm if args.alg == 2 else "",
         "without_comm": without_comm if args.alg == 2 else "",
     }
@@ -295,7 +319,7 @@ def summarize_group(size_label: str, fixed_percentage: Optional[int], stats: dic
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run all general Sudoku instances through the solver.")
-    parser.add_argument("--instances-root", default="instances/general", help="Folder containing general instances (default: instances/general)")
+    parser.add_argument("--instances-root", default=None, help="Folder containing instances (default: runs both instances/general AND instances/logic-solvable)")
     parser.add_argument("--solver", default=None, help="Path to the solver executable (default: auto-detect)")
     parser.add_argument("--output", default="results/general_metrics.csv", help="Destination CSV file for metrics.")
     parser.add_argument("--alg", type=int, default=0, help="Solver algorithm (0=ACS, 1=backtracking).")
@@ -304,7 +328,6 @@ def main() -> int:
     parser.add_argument("--subcolonies", type=int, default=None, help="Number of sub-colonies for parallel ACS (alg=2, default: 4).")
     parser.add_argument("--q0", type=float, default=0.9, help="Override ACS q0 parameter.")
     parser.add_argument("--rho", type=float, default=0.9, help="Override ACS rho parameter.")
-    parser.add_argument("--rhocomm", type=float, default=0.05, help="Override ACS communication evaporation parameter (alg=2 only, default: 0.05).")
     parser.add_argument("--evap", type=float, default=0.005, help="Override ACS evaporation parameter.")
     parser.add_argument("--limit", type=int, default=None, help="Optional cap on number of instances to process.")
     parser.add_argument("--puzzle-size", dest="puzzle_sizes", nargs="+", choices=["9x9", "16x16", "25x25"], help="Filter by puzzle size(s), e.g. --puzzle-size 25x25.")
@@ -317,7 +340,6 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = find_repo_root()
-    instances_root = (repo_root / args.instances_root).resolve()
 
     try:
         solver_path = resolve_solver_path(args.solver)
@@ -325,15 +347,27 @@ def main() -> int:
         print(exc, file=sys.stderr)
         return 1
 
-    try:
-        instance_files = list(iter_instance_files(instances_root))
-    except FileNotFoundError as exc:
-        print(exc, file=sys.stderr)
-        return 1
-
-    if not instance_files:
-        print(f"No instances found in '{instances_root}'.", file=sys.stderr)
-        return 1
+    # Determine which instances to run
+    if args.instances_root is not None:
+        # User specified a specific folder
+        instances_root = (repo_root / args.instances_root).resolve()
+        try:
+            instance_files = list(iter_instance_files(instances_root))
+        except FileNotFoundError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        if not instance_files:
+            print(f"No instances found in '{instances_root}'.", file=sys.stderr)
+            return 1
+        instances_root_display = instances_root
+    else:
+        # Default: run both general and logic-solvable instances
+        try:
+            instance_files = list(iter_all_instance_files(repo_root))
+        except FileNotFoundError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        instances_root_display = repo_root / "instances" / "(general + logic-solvable)"
 
     metadata_list = sort_instance_metadata([parse_metadata(path) for path in instance_files])
 
@@ -368,16 +402,11 @@ def main() -> int:
     overall_without_comm = 0
 
     for idx, metadata in enumerate(metadata_list, start=1):
-        cmd = build_solver_command(solver_path, metadata.path, repo_root, args)
-        # Show progress for algorithm 2 when verbose is enabled
-        show_progress = args.verbose and args.alg == 2
-        result = run_solver(cmd, repo_root, timeout=args.solver_timeout, show_progress=show_progress)
-
-        success, solve_time, iterations, communication, stdout_text, stderr_text = parse_solver_output(result.stdout, result.stderr if result.stderr else "")
-
-        if success is False and (solve_time is None or solve_time == 0.0):
-            solve_time = round(float(args.timeout), 5)
-
+        # Determine if this is a logic-solvable instance (no fixed_percentage)
+        is_logic_solvable = metadata.fixed_percentage is None
+        num_runs = 100 if is_logic_solvable else 1
+        
+        # Group key for statistics
         group_key = (metadata.size_label, metadata.fixed_percentage)
         if current_group_key is None:
             current_group_key = group_key
@@ -387,45 +416,69 @@ def main() -> int:
                 group_rows.append(row)
             group_stats = {"total": 0, "successes": 0, "fails": 0, "times": [], "iterations": [], "with_comm": 0, "without_comm": 0}
             current_group_key = group_key
+        
+        # Run the puzzle num_runs times (100 for logic-solvable, 1 for general)
+        for run_num in range(1, num_runs + 1):
+            cmd = build_solver_command(solver_path, metadata.path, repo_root, args)
+            # Show progress for algorithm 2 when verbose is enabled
+            show_progress = args.verbose and args.alg == 2
+            result = run_solver(cmd, repo_root, timeout=args.solver_timeout, show_progress=show_progress)
 
-        if args.verbose:
-            status = "OK" if success else "FAIL" if success is not None else "UNKNOWN"
-            if solve_time is not None:
-                # Show iterations for algorithm 2
-                if iterations is not None:
-                    print(f"[{idx}/{total_instances}] {metadata.relative_path} -> {status} ({solve_time:.5f}s, {iterations} iter)")
+            success, solve_time, iterations, communication, stdout_text, stderr_text = parse_solver_output(result.stdout, result.stderr if result.stderr else "")
+
+            if success is False and (solve_time is None or solve_time == 0.0):
+                solve_time = round(float(args.timeout), 5)
+
+            if args.verbose:
+                status = "OK" if success else "FAIL" if success is not None else "UNKNOWN"
+                if is_logic_solvable:
+                    # For logic-solvable, show run number
+                    if solve_time is not None:
+                        if iterations is not None:
+                            print(f"[{metadata.size_label} run {run_num}/{num_runs}] {metadata.relative_path} -> {status} ({solve_time:.5f}s, {iterations} iter)")
+                        else:
+                            print(f"[{metadata.size_label} run {run_num}/{num_runs}] {metadata.relative_path} -> {status} ({solve_time:.5f}s)")
+                    else:
+                        print(f"[{metadata.size_label} run {run_num}/{num_runs}] {metadata.relative_path} -> {status}")
                 else:
-                    print(f"[{idx}/{total_instances}] {metadata.relative_path} -> {status} ({solve_time:.5f}s)")
-            else:
-                print(f"[{idx}/{total_instances}] {metadata.relative_path} -> {status}")
+                    # For general instances, show normal format
+                    if solve_time is not None:
+                        if iterations is not None:
+                            print(f"[{idx}/{total_instances}] {metadata.relative_path} -> {status} ({solve_time:.5f}s, {iterations} iter)")
+                        else:
+                            print(f"[{idx}/{total_instances}] {metadata.relative_path} -> {status} ({solve_time:.5f}s)")
+                    else:
+                        print(f"[{idx}/{total_instances}] {metadata.relative_path} -> {status}")
 
-        group_stats["total"] += 1
-        if success:
-            group_stats["successes"] += 1
-        else:
-            group_stats["fails"] += 1
-        if solve_time is not None:
-            group_stats["times"].append(solve_time)
-        if iterations is not None:
-            group_stats["iterations"].append(iterations)
-        if communication is not None:
-            if communication:
-                group_stats["with_comm"] += 1
+            group_stats["total"] += 1
+            if success:
+                group_stats["successes"] += 1
             else:
-                group_stats["without_comm"] += 1
+                group_stats["fails"] += 1
+            # Only include times and iterations from successful runs in statistics
+            if success and solve_time is not None:
+                group_stats["times"].append(solve_time)
+                if iterations is not None:
+                    group_stats["iterations"].append(iterations)
+                if communication is not None:
+                    if communication:
+                        group_stats["with_comm"] += 1
+                    else:
+                        group_stats["without_comm"] += 1
 
-        overall_total += 1
-        if success:
-            overall_successes += 1
-        if solve_time is not None:
-            overall_times.append(solve_time)
-        if iterations is not None:
-            overall_iterations.append(iterations)
-        if communication is not None:
-            if communication:
-                overall_with_comm += 1
-            else:
-                overall_without_comm += 1
+            overall_total += 1
+            if success:
+                overall_successes += 1
+            # Only include times and iterations from successful runs in statistics
+            if success and solve_time is not None:
+                overall_times.append(solve_time)
+                if iterations is not None:
+                    overall_iterations.append(iterations)
+                if communication is not None:
+                    if communication:
+                        overall_with_comm += 1
+                    else:
+                        overall_without_comm += 1
 
     output_path = (repo_root / args.output).resolve()
     if current_group_key is not None:
@@ -447,7 +500,7 @@ def main() -> int:
 
     print("===== Summary =====")
     print(f"Solver binary   : {solver_path}")
-    print(f"Instances folder: {instances_root}")
+    print(f"Instances folder: {instances_root_display}")
     print(f"Output CSV      : {output_path}")
     print(f"Algorithm       : {args.alg}")
     print(f"Ants            : {actual_ants}")
@@ -455,9 +508,7 @@ def main() -> int:
         print(f"Sub-colonies    : {actual_subcolonies}")
     print(f"q0              : {args.q0}")
     print(f"rho             : {args.rho}")
-    if args.alg == 2:
-        print(f"rho_comm        : {args.rhocomm}")
-    print(f"xi (evap)       : {args.evap}")
+    print(f"bve             : {args.evap}")
     print(f"Timeout         : {args.timeout}s")
     print(f"Total puzzles   : {total}")
     print(f"Succeeded       : {successes}")
@@ -470,6 +521,8 @@ def main() -> int:
             print(f"With comm       : {overall_with_comm}/{overall_with_comm + overall_without_comm} ({(overall_with_comm / (overall_with_comm + overall_without_comm) * 100.0):.1f}%)")
     else:
         print(f"Average time    : n/a")
+    
+    sys.stdout.flush()  # Force immediate output to prevent timing issues
 
     return 0
 

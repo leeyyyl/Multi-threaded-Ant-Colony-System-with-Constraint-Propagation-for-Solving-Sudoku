@@ -25,7 +25,7 @@ void SudokuAnt::StepSolution()
 	{
 		// make a choice from the options
 		ValueSet choice = ValueSet(sol.GetNumUnits(), 1);
-		if (parent->random() > parent->Getq0())
+		if (parent->random() < parent->Getq0())
 		{
 			// greedy selection
 			ValueSet best;

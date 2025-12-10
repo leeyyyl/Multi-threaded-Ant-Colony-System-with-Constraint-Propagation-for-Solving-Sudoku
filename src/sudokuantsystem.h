@@ -17,6 +17,7 @@ class SudokuAntSystem : public SudokuSolver, public IAntColony
 	Board bestSol;
 	float bestPher;
 	int bestVal;
+	int iterationsCompleted;
 	Timer solutionTimer;
 	float solTime;
 
@@ -33,7 +34,7 @@ class SudokuAntSystem : public SudokuSolver, public IAntColony
 
 public:
 	SudokuAntSystem(int numAnts, float q0, float rho, float pher0, float bestEvap) : 
-		numAnts(numAnts), q0(q0), rho(rho), pher0(pher0), bestEvap(bestEvap)
+		numAnts(numAnts), q0(q0), rho(rho), pher0(pher0), bestEvap(bestEvap), iterationsCompleted(0)
 	{
 		for ( int i = 0; i < numAnts; i++ )
 			antList.push_back(new SudokuAnt(this));
@@ -49,6 +50,7 @@ public:
 	virtual bool Solve(const Board& puzzle, float maxTime );
 	virtual float GetSolutionTime() { return solTime; }
 	virtual const Board& GetSolution() { return bestSol; }
+	int GetIterationsCompleted() { return iterationsCompleted; }
 	// helpers for ants
 	inline float Getq0() { return q0; }
 	inline float random() { return randomDist(randGen); }
