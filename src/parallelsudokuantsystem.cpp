@@ -212,7 +212,7 @@ void SubColony::UpdatePheromoneWithCommunication()
 			{
 				// Evaporate old pheromone, add new contribution
 				// Using rho for communication update
-				pher[i][j] = pher[i][j] * (1.0f - rho) + contributions[j];
+				pher[i][j] = pher[i][j] * (1.0f - rho) + rho * contributions[j];
 			}
 		}
 	}
@@ -309,14 +309,6 @@ ParallelSudokuAntSystem::ParallelSudokuAntSystem(int nSubColonies, int numAntsPe
 	: numSubColonies(nSubColonies), maxTime(120.0f),
 	  globalBestScore(0), iterationsCompleted(0), communicationOccurred(false), solTime(0.0f), barrier(0), stopFlag(false)
 {
-	// === INPUT VALIDATION ===
-	// Ensure at least 3 sub-colonies for meaningful parallel execution and communication
-	if (numSubColonies < 3)
-	{
-		std::cerr << "Warning: numSubColonies must be >= 3 for proper parallel execution. Setting to 3." << std::endl;
-		numSubColonies = 3;
-	}
-	
 	// Create N independent sub-colonies
 	// Note: rho is used for both standard ACS global update and communication update
 	for (int i = 0; i < numSubColonies; i++)
@@ -421,7 +413,8 @@ bool ParallelSudokuAntSystem::CheckTimeout()
 	if (solutionTimer.Elapsed() >= maxTime)
 	{
 		stopFlag.store(true);
-		commCV.notify_all();  // Wake up waiting threads
+		if (numSubColonies > 1)
+			commCV.notify_all();  // Wake up waiting threads (only needed for multiple threads)
 		return true;
 	}
 	return false;
@@ -460,7 +453,8 @@ bool ParallelSudokuAntSystem::CheckSolutionFound(SubColony* colony)
 	if (colony->GetBestSolScore() == colony->GetBestSol().CellCount())
 	{
 		stopFlag.store(true);
-		commCV.notify_all();  // Notify all threads to stop
+		if (numSubColonies > 1)
+			commCV.notify_all();  // Notify all threads to stop (only needed for multiple threads)
 		return true;
 	}
 	return false;
@@ -590,12 +584,20 @@ void ParallelSudokuAntSystem::SubColonyWorker(int colonyId, const Board& puzzle)
 	
 	int iter = 0;
 	
+	// === OPTIMIZATION: Use local bool for single thread to avoid atomic overhead ===
+	bool shouldStop = false;
+	bool useLocalStop = (numSubColonies == 1);
+	
 	// === MAIN ITERATION LOOP ===
-	while (!stopFlag.load())
+	while (useLocalStop ? !shouldStop : !stopFlag.load())
 	{
 		// --- STEP 1: Check Termination Conditions ---
 		if (CheckTimeout())
+		{
+			if (useLocalStop)
+				shouldStop = true;
 			break;
+		}
 		
 		iter++;
 		colony->currentIteration = iter;
@@ -605,19 +607,24 @@ void ParallelSudokuAntSystem::SubColonyWorker(int colonyId, const Board& puzzle)
 		
 		// --- STEP 3: Pheromone Update (Mutually Exclusive) ---
 		// Either standard Algorithm 0 update OR three-source communication update
-		// Before iteration 200: communicate every 100 iterations (at 100, 200)
-		// After iteration 200: communicate every 10 iterations (at 210, 220, etc.)
+		// Skip communication if only 1 thread (behaves like Algorithm 0)
 		bool shouldCommunicate = false;
-		if (iter < 200)
+		if (numSubColonies > 1)
 		{
-			// Every 100 iterations: 100, 200
-			shouldCommunicate = (iter % 100 == 0);
+			// Before iteration 200: communicate every 100 iterations (at 100, 200)
+			// After iteration 200: communicate every 10 iterations (at 210, 220, etc.)
+			if (iter < 200)
+			{
+				// Every 100 iterations: 100, 200
+				shouldCommunicate = (iter % 100 == 0);
+			}
+			else
+			{
+				// Every 10 iterations: 210, 220, 230, etc.
+				shouldCommunicate = (iter % 10 == 0);
+			}
 		}
-		else
-		{
-			// Every 10 iterations: 210, 220, 230, etc.
-			shouldCommunicate = (iter % 10 == 0);
-		}
+		// If numSubColonies == 1, shouldCommunicate stays false (always use Algorithm 0 update)
 		
 		if (shouldCommunicate)
 		{
@@ -629,7 +636,12 @@ void ParallelSudokuAntSystem::SubColonyWorker(int colonyId, const Board& puzzle)
 			colony->UpdatePheromoneWithCommunication();
 			
 			// Check stop flag after synchronization
-			if (stopFlag.load())
+			if (useLocalStop)
+			{
+				if (stopFlag.load())  // Still check atomic for timeout from CheckTimeout
+					shouldStop = true;
+			}
+			if (useLocalStop ? shouldStop : stopFlag.load())
 				break;
 		}
 		else
@@ -638,7 +650,8 @@ void ParallelSudokuAntSystem::SubColonyWorker(int colonyId, const Board& puzzle)
 			// Uses: only local best-so-far
 			colony->UpdatePheromone();
 			
-			// --- STEP 3d: Decay Best Pheromone (only on non-comm iterations, when bestPher is used) ---
+			// --- STEP 3d: Decay Best Pheromone (only when bestPher is actually used) ---
+			// bestPher is not used during communication intervals, so decay only here
 			colony->bestPher *= (1.0f - colony->bestEvap);
 		}
 		
@@ -647,7 +660,11 @@ void ParallelSudokuAntSystem::SubColonyWorker(int colonyId, const Board& puzzle)
 		
 		// --- STEP 5: Check if Solution Found ---
 		if (CheckSolutionFound(colony))
+		{
+			if (useLocalStop)
+				shouldStop = true;
 			break;
+		}
 	}
 }
 
